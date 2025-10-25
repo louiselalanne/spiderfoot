@@ -13,7 +13,8 @@
 
 import json
 import os.path
-from subprocess import PIPE, Popen, TimeoutExpired
+import tempfile
+from subprocess import PIPE, Popen
 
 from spiderfoot import SpiderFootEvent, SpiderFootPlugin, SpiderFootHelpers
 
@@ -97,23 +98,20 @@ class sfp_tool_wafw00f(SpiderFootPlugin):
             self.error("Invalid input, refusing to run.")
             return
 
+        output_file = tempfile.mktemp(suffix=".json")
+
         args = [
             self.opts['python_path'],
             exe,
             '-a',
-            '-o-',
-            '-f',
-            'json',
+            '-o',
+            output_file,
             url
         ]
+
         try:
             p = Popen(args, stdout=PIPE, stderr=PIPE)
-            stdout, stderr = p.communicate(input=None, timeout=300)
-        except TimeoutExpired:
-            p.kill()
-            stdout, stderr = p.communicate()
-            self.debug(f"Timed out waiting for wafw00f to finish on {eventData}")
-            return
+            stdout, stderr = p.communicate(input=None)
         except Exception as e:
             self.error(f"Unable to run wafw00f: {e}")
             return
@@ -122,15 +120,15 @@ class sfp_tool_wafw00f(SpiderFootPlugin):
             self.error(f"Unable to read wafw00f output\nstderr: {stderr}\nstdout: {stdout}")
             return
 
-        if not stdout:
-            self.debug(f"wafw00f returned no output for {eventData}")
-            return
-
         try:
-            result_json = json.loads(stdout)
+            with open(output_file, "r") as f:
+                result_json = json.load(f)
         except Exception as e:
-            self.error(f"Could not parse wafw00f output as JSON: {e}\nstdout: {stdout}")
+            self.error(f"Could not parse wafw00f output as JSON from file: {e}")
             return
+        finally:
+            if os.path.exists(output_file):
+                os.remove(output_file)
 
         if not result_json:
             self.debug(f"wafw00f returned no output for {eventData}")
