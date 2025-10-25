@@ -31,10 +31,7 @@ class sfp_tool_nuclei(SpiderFootPlugin):
             "slow",
             "invasive"
         ],
-        "useCases": [
-            "Footprint",
-            "Investigate"
-        ],
+        "useCases": ["Footprint", "Investigate"],
         "categories": ["Crawling and Scanning"],
         "toolDetails": {
             "name": "Nuclei",
@@ -44,6 +41,7 @@ class sfp_tool_nuclei(SpiderFootPlugin):
         }
     }
 
+    # Default options
     opts = {
         "nuclei_path": "",
         "template_path": "",
@@ -51,6 +49,7 @@ class sfp_tool_nuclei(SpiderFootPlugin):
         'netblockscanmax': 24
     }
 
+    # Option descriptions
     optdescs = {
         'nuclei_path': "The path to your nuclei binary. Must be set.",
         'template_path': "The path to your nuclei templates. Must be set.",
@@ -83,6 +82,7 @@ class sfp_tool_nuclei(SpiderFootPlugin):
             "WEBSERVER_TECHNOLOGY"
         ]
 
+    # Handle events sent to this module
     def handleEvent(self, event):
         eventName = event.eventType
         srcModuleName = event.module
@@ -113,17 +113,21 @@ class sfp_tool_nuclei(SpiderFootPlugin):
         if not SpiderFootHelpers.sanitiseInput(eventData, extra=['/']):
             self.debug("Invalid input, skipping.")
             return
+
+        # Don't look up stuff twice
         if eventData in self.results:
             self.debug(f"Skipping {eventData} as already scanned.")
             return
 
         if eventName != "INTERNET_NAME":
+            # Might be a subnet within a subnet or IP within a subnet
             for addr in self.results:
                 try:
                     if IPNetwork(eventData) in IPNetwork(addr):
                         self.debug(f"Skipping {eventData} as already within a scanned range.")
                         return
                 except BaseException:
+                    # self.results will also contain hostnames
                     continue
 
         self.results[eventData] = True
@@ -138,6 +142,8 @@ class sfp_tool_nuclei(SpiderFootPlugin):
                     self.debug(f"Skipping scanning of {eventData}, too big.")
                     return
 
+                # Nuclei doesn't support targeting subnets directly,
+                # so for now work around that by listing each IP.
                 for addr in IPNetwork(eventData).iter_hosts():
                     target += str(addr) + "\n"
                     timeout += 240
